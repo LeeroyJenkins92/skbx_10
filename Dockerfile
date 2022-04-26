@@ -1,20 +1,33 @@
 FROM alpine:3.11
 
-ADD https://dl.bintray.com/php-alpine/key/php-alpine.rsa.pub /etc/apk/keys/php-alpine.rsa.pub
+ADD https://packages.whatwedo.ch/php-alpine.rsa.pub /etc/apk/keys/php-alpine.rsa.pub
 
 # make sure you can use HTTPS
 RUN apk --update add ca-certificates
-RUN echo "https://dl.bintray.com/php-alpine/v3.11/php-7.4" >> /etc/apk/repositories
+#RUN getent hosts dl-cdn.alpinelinux.org
+RUN echo "https://packages.whatwedo.ch/php-alpine/v3.11/php-7.4" >> /etc/apk/repositories
 
 # Install packages
 RUN apk --no-cache add php php-fpm php-opcache php-openssl php-curl \
     nginx supervisor curl
 
+# INSTALL Python3+PIP+TESTINFRA
+ENV PYTHONUNBUFFERED=1
+RUN apk add --update --no-cache python3 && ln -sf python3 /usr/bin/python
+RUN python3 -m ensurepip
+RUN pip3 install --no-cache --upgrade pip setuptools
+RUN pip3 install pytest-testinfra
+
+# INSTALL OPENRC
+RUN apk add --update openrc
+
 # https://github.com/codecasts/php-alpine/issues/21
 RUN ln -s /usr/bin/php7 /usr/bin/php
 
-# Configure nginx
-COPY config/nginx.conf /etc/nginx/nginx.conf
+#Configure nginx
+COPY ./config/nginx.conf /etc/nginx/nginx.conf
+RUN mkdir /etc/nginx/test
+COPY test.py /etc/nginx/test
 
 # Remove default server definition
 RUN rm /etc/nginx/conf.d/default.conf
@@ -50,3 +63,6 @@ CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # Configure a healthcheck to validate that everything is up&running
 HEALTHCHECK --timeout=10s CMD curl --silent --fail http://127.0.0.1:8080/fpm-ping
+
+#RUN tests
+RUN  pytest /etc/nginx/test/test.py 
